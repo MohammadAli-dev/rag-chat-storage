@@ -7,7 +7,7 @@ spring:
     password: ragchat_pass
     driver-class-name: org.postgresql.Driver
   flyway:
-    enabled: false
+    enabled: true
   jpa:
     hibernate:
       ddl-auto: validate
