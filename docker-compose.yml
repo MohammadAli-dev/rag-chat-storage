@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: ragchat-postgres
+    environment:
+      POSTGRES_DB: ragchat
+      POSTGRES_USER: ragchat_user
+      POSTGRES_PASSWORD: ragchat_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - ragchat_data:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer
+    container_name: ragchat-adminer
+    ports:
+      - "8090:8080"
+    depends_on:
+      - postgres
+
+volumes:
+  ragchat_data:
