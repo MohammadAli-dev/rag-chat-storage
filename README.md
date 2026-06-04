@@ -16,6 +16,7 @@ A production-style Spring Boot 4 REST API for storing and managing RAG (Retrieva
 - [Example Requests](#example-requests)
 - [Rate Limiting](#rate-limiting)
 - [Request Tracing](#request-tracing)
+- [CORS](#cors)
 - [Error Handling](#error-handling)
 - [Database Schema](#database-schema)
 - [Configuration](#configuration)
@@ -403,6 +404,36 @@ curl http://localhost:8082/actuator/health \
 ```
 
 The request ID is injected into the logging MDC, so all log lines for a single request share the same trace ID.
+
+---
+
+## CORS
+
+Cross-Origin Resource Sharing is enabled for all origins. The configuration is defined in [SecurityConfig.java](file:///Users/mohammadali/rag-chat-storage/src/main/java/com/assessment/ragchat/security/SecurityConfig.java).
+
+| Setting | Value |
+|---------|-------|
+| Allowed Origins | `*` (all origins) |
+| Allowed Methods | `GET`, `POST`, `PATCH`, `DELETE`, `OPTIONS` |
+| Allowed Headers | `*` (all headers) |
+| Path Pattern | `/**` (all endpoints) |
+
+To test CORS with a preflight request:
+
+```bash
+curl -v -X OPTIONS http://localhost:8082/api/v1/sessions \
+  -H "Origin: http://example.com" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: X-API-KEY, Content-Type"
+```
+
+The response will include headers such as:
+
+```
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: *
+```
 
 ---
 
