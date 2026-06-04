@@ -16,6 +16,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final ApiKeyFilter apiKeyFilter;
+    private final RateLimitFilter rateLimitFilter;
+
 
     private static final String[] PUBLIC_PATHS = {
             "/actuator/health",
@@ -33,7 +35,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(PUBLIC_PATHS).permitAll()
                 .anyRequest().authenticated())
-            .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(rateLimitFilter, ApiKeyFilter.class);
 
         return http.build();
     }
