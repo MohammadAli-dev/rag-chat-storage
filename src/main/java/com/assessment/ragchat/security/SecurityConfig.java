@@ -17,6 +17,7 @@ public class SecurityConfig {
 
     private final ApiKeyFilter apiKeyFilter;
     private final RateLimitFilter rateLimitFilter;
+    private final RequestIdFilter requestIdFilter;
 
 
     private static final String[] PUBLIC_PATHS = {
@@ -35,7 +36,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(PUBLIC_PATHS).permitAll()
                 .anyRequest().authenticated())
-            .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(requestIdFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(apiKeyFilter, RequestIdFilter.class)
             .addFilterAfter(rateLimitFilter, ApiKeyFilter.class);
 
         return http.build();

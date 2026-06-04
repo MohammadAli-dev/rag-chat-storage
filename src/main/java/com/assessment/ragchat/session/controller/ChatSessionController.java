@@ -14,6 +14,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/sessions")
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 public class ChatSessionController {
 
     private final ChatSessionService sessionService;
@@ -21,6 +22,7 @@ public class ChatSessionController {
     @PostMapping
     public ResponseEntity<CreateSessionResponse> createSession(
             @Valid @RequestBody CreateSessionRequest request) {
+        log.info("Creating session for user: {}", request.getUserId());
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(sessionService.createSession(request));
