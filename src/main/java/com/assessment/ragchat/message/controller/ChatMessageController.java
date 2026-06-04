@@ -1,5 +1,6 @@
 package com.assessment.ragchat.message.controller;
 
+import com.assessment.ragchat.common.PagedResponse;
 import com.assessment.ragchat.message.dto.AddMessageRequest;
 import com.assessment.ragchat.message.dto.AddMessageResponse;
 import com.assessment.ragchat.message.dto.MessageResponse;
@@ -31,11 +32,11 @@ public class ChatMessageController {
     }
 
     @GetMapping("/{id}/messages")
-    public ResponseEntity<Page<MessageResponse>> getMessages(
+    public ResponseEntity<PagedResponse<MessageResponse>> getMessages(
             @PathVariable UUID id,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(
-                messageService.getMessages(id, PageRequest.of(page, size)));
+        Page<MessageResponse> result = messageService.getMessages(id, PageRequest.of(page, size));
+        return ResponseEntity.ok(PagedResponse.from(result));
     }
 }
