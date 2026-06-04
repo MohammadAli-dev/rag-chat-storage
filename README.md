@@ -12,6 +12,7 @@ A production-style Spring Boot 4 REST API for storing and managing RAG (Retrieva
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
 - [Authentication](#authentication)
+- [API Contract](#api-contract)
 - [API Endpoints](#api-endpoints)
 - [Example Requests](#example-requests)
 - [Rate Limiting](#rate-limiting)
@@ -20,6 +21,7 @@ A production-style Spring Boot 4 REST API for storing and managing RAG (Retrieva
 - [Error Handling](#error-handling)
 - [Database Schema](#database-schema)
 - [Configuration](#configuration)
+- [Design Decisions](#design-decisions)
 - [Testing](#testing)
 - [Building for Production](#building-for-production)
 
@@ -69,7 +71,7 @@ Every request passes through three ordered filters before reaching a controller:
 |-------|--------|---------------|
 | 1 | `RequestIdFilter` | Generates or propagates a `X-Request-ID` header; injects it into MDC for structured logging |
 | 2 | `ApiKeyFilter` | Validates the `X-API-KEY` header against the configured key; sets Spring Security authentication on success; returns `401` on failure. Skipped for public paths |
-| 3 | `RateLimitFilter` | Token-bucket rate limiter (Bucket4j) — 100 requests/minute per API key; returns `429` when exceeded |
+| 3 | `RateLimitFilter` | Token-bucket rate limiter (Bucket4j), defaulting to 100 requests/minute per API key; returns `429` when exceeded |
 
 ---
 
@@ -174,7 +176,7 @@ rag-chat-storage/
 ### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/MohammadAli-dev/rag-chat-storage.git
 cd rag-chat-storage
 ```
 
@@ -244,6 +246,14 @@ Requests with a missing or invalid API key receive:
   "message": "Invalid or missing API key"
 }
 ```
+
+---
+
+## API Contract
+
+The static OpenAPI contract is maintained in [`docs/openapi.yaml`](docs/openapi.yaml). It mirrors the implemented controller DTOs, including the structured RAG `context` array stored with each message.
+
+Swagger UI is also available at [http://localhost:8082/swagger-ui/index.html](http://localhost:8082/swagger-ui/index.html) when the application is running.
 
 ---
 
@@ -380,7 +390,7 @@ curl -X DELETE http://localhost:8082/api/v1/sessions/{id} \
 
 ## Rate Limiting
 
-Each API key is limited to **100 requests per minute** (token-bucket algorithm via Bucket4j).
+Each API key is limited to **100 requests per minute by default** (token-bucket algorithm via Bucket4j). Override `APP_RATE_LIMIT_MAX_REQUESTS_PER_MINUTE` for production environments that need a different limit.
 
 Exceeding the limit returns:
 ```json
@@ -409,13 +419,13 @@ The request ID is injected into the logging MDC, so all log lines for a single r
 
 ## CORS
 
-Cross-Origin Resource Sharing is enabled for all origins. The configuration is defined in [SecurityConfig.java](file:///Users/mohammadali/rag-chat-storage/src/main/java/com/assessment/ragchat/security/SecurityConfig.java).
+Cross-Origin Resource Sharing is enabled for all origins by default. The configuration is defined in [`SecurityConfig.java`](src/main/java/com/assessment/ragchat/security/SecurityConfig.java) and can be overridden with `APP_CORS_ALLOWED_ORIGINS`, `APP_CORS_ALLOWED_METHODS`, and `APP_CORS_ALLOWED_HEADERS`.
 
 | Setting | Value |
 |---------|-------|
-| Allowed Origins | `*` (all origins) |
-| Allowed Methods | `GET`, `POST`, `PATCH`, `DELETE`, `OPTIONS` |
-| Allowed Headers | `*` (all headers) |
+| Allowed Origins | `*` (all origins), configurable |
+| Allowed Methods | `GET`, `POST`, `PATCH`, `DELETE`, `OPTIONS`, configurable |
+| Allowed Headers | `*` (all headers), configurable |
 | Path Pattern | `/**` (all endpoints) |
 
 To test CORS with a preflight request:
@@ -507,30 +517,55 @@ All settings are in `src/main/resources/application.yml`:
 
 ```yaml
 spring:
+  application:
+    name: ${SPRING_APPLICATION_NAME:ragchat}
   datasource:
-    url: jdbc:postgresql://localhost:5432/ragchat
-    username: ragchat_user
-    password: ragchat_pass
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/ragchat}
+    username: ${SPRING_DATASOURCE_USERNAME:ragchat_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:ragchat_pass}
   flyway:
-    enabled: true
-    locations: classpath:db/migration
+    enabled: ${SPRING_FLYWAY_ENABLED:true}
+    locations: ${SPRING_FLYWAY_LOCATIONS:classpath:db/migration}
   jpa:
     hibernate:
-      ddl-auto: validate          # Schema managed by Flyway; JPA only validates
-    open-in-view: false           # Prevents lazy-loading outside transactions
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
+    open-in-view: ${SPRING_JPA_OPEN_IN_VIEW:false}
 
 server:
-  port: 8082
+  port: ${SERVER_PORT:8082}
+
+springdoc:
+  swagger-ui:
+    path: ${SPRINGDOC_SWAGGER_UI_PATH:/swagger-ui.html}
+  api-docs:
+    path: ${SPRINGDOC_API_DOCS_PATH:/v3/api-docs}
 
 app:
   security:
-    api-key: my-secret-key        # Change this in production
+    api-key: ${APP_SECURITY_API_KEY:my-secret-key}
+  rate-limit:
+    max-requests-per-minute: ${APP_RATE_LIMIT_MAX_REQUESTS_PER_MINUTE:100}
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:*}
+    allowed-methods: ${APP_CORS_ALLOWED_METHODS:GET,POST,PATCH,DELETE,OPTIONS}
+    allowed-headers: ${APP_CORS_ALLOWED_HEADERS:*}
 ```
 
 Key design decisions:
 - **`ddl-auto: validate`** — Hibernate validates the entity mapping against the Flyway-managed schema but never modifies it. This prevents accidental schema drift.
 - **`open-in-view: false`** — Disables the Open Session in View anti-pattern, ensuring lazy-loading only works within explicit `@Transactional` boundaries.
 - **Stateless sessions** — `SessionCreationPolicy.STATELESS` is configured since the API uses key-based auth, not session cookies.
+
+---
+
+## Design Decisions
+
+PostgreSQL JSONB was chosen for RAG context storage because retrieval context is naturally semi-structured: chunks may contain identifiers, source URLs, scores, and content today, while future retrieval metadata can be added without a schema migration. JSONB also keeps the context attached to the message it explains, supports GIN indexing, and preserves auditability for generated answers.
+
+API key authentication was selected because this service is intended as a backend storage API consumed by trusted clients or internal RAG services rather than by end users directly. It keeps authentication stateless, simple to operate, and easy to rotate through environment configuration while still protecting all `/api/v1/**` endpoints.
+
+The application is implemented as a modular monolith because sessions, messages, security, and persistence are tightly related in this submission-sized service. Keeping them in one deployable avoids premature distributed-system complexity while preserving clear package boundaries, service layers, repositories, DTOs, and migration ownership if the codebase later needs to split.
 
 ---
 

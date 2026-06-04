@@ -2,31 +2,45 @@ openapi: 3.0.3
 info:
   title: RAG Chat Storage API
   version: 1.0.0
+  description: REST API for storing RAG chat sessions, messages, and retrieval context chunks.
+
+servers:
+  - url: http://localhost:8082
+    description: Local development
+
+security:
+  - ApiKeyAuth: []
 
 paths:
-
   /api/v1/sessions:
     post:
       summary: Create a new chat session
+      operationId: createSession
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                userId:
-                  type: string
-                title:
-                  type: string
+              $ref: '#/components/schemas/CreateSessionRequest'
       responses:
         "201":
           description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSessionResponse'
         "400":
-          description: Bad request
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
 
     get:
       summary: List all sessions for a user
+      operationId: listSessions
       parameters:
         - name: userId
           in: query
@@ -35,128 +49,376 @@ paths:
             type: string
       responses:
         "200":
-          description: List of sessions
+          description: Sessions ordered by newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SessionResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
 
   /api/v1/sessions/{id}:
     get:
       summary: Get a session by ID
+      operationId: getSession
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/SessionId'
       responses:
         "200":
           description: Session found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
         "404":
-          description: Session not found
+          $ref: '#/components/responses/NotFound'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
 
     delete:
       summary: Delete a session
+      operationId: deleteSession
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/SessionId'
       responses:
         "204":
-          description: Deleted
+          description: Session deleted
+        "401":
+          $ref: '#/components/responses/Unauthorized'
         "404":
-          description: Not found
+          $ref: '#/components/responses/NotFound'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
 
   /api/v1/sessions/{id}/rename:
     patch:
       summary: Rename a session
+      operationId: renameSession
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/SessionId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                title:
-                  type: string
+              $ref: '#/components/schemas/RenameSessionRequest'
       responses:
         "200":
-          description: Renamed
+          description: Session renamed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
         "404":
-          description: Not found
+          $ref: '#/components/responses/NotFound'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
 
   /api/v1/sessions/{id}/favorite:
     patch:
       summary: Toggle favorite on a session
+      operationId: toggleFavorite
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/SessionId'
       responses:
         "200":
-          description: Favorite toggled
+          description: Favorite flag toggled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
 
   /api/v1/sessions/{id}/messages:
     post:
       summary: Add a message to a session
+      operationId: addMessage
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/SessionId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                sender:
-                  type: string
-                  enum: [USER, BOT]
-                content:
-                  type: string
-                context:
-                  type: string
+              $ref: '#/components/schemas/AddMessageRequest'
       responses:
         "201":
           description: Message added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddMessageResponse'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
         "404":
-          description: Session not found
+          $ref: '#/components/responses/NotFound'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
 
     get:
       summary: Get messages for a session
+      operationId: getMessages
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/SessionId'
         - name: page
           in: query
+          required: false
           schema:
             type: integer
+            format: int32
             default: 0
         - name: size
           in: query
+          required: false
           schema:
             type: integer
+            format: int32
             default: 20
       responses:
         "200":
-          description: Paginated list of messages
+          description: Paginated messages ordered by creation time ascending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedMessageResponse'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
 
   /actuator/health:
     get:
       summary: Health check
+      operationId: health
+      security: []
       responses:
         "200":
-          description: App is healthy
+          description: Application is healthy
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY
+
+  parameters:
+    SessionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Validation failure or malformed request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Session or message not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TooManyRequests:
+      description: API key rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalServerError:
+      description: Unexpected server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    CreateSessionRequest:
+      type: object
+      required:
+        - userId
+        - title
+      properties:
+        userId:
+          type: string
+          example: user-1
+        title:
+          type: string
+          example: My Chat Session
+
+    RenameSessionRequest:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          example: New Title
+
+    CreateSessionResponse:
+      allOf:
+        - $ref: '#/components/schemas/SessionResponse'
+
+    SessionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        title:
+          type: string
+        favorite:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AddMessageRequest:
+      type: object
+      required:
+        - sender
+        - content
+      properties:
+        sender:
+          $ref: '#/components/schemas/SenderType'
+        content:
+          type: string
+          example: What is the capital of France?
+        context:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/ContextChunk'
+
+    AddMessageResponse:
+      allOf:
+        - $ref: '#/components/schemas/MessageResponse'
+
+    MessageResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        sender:
+          $ref: '#/components/schemas/SenderType'
+        content:
+          type: string
+        context:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/ContextChunk'
+        createdAt:
+          type: string
+          format: date-time
+
+    ContextChunk:
+      type: object
+      properties:
+        chunkId:
+          type: string
+          example: abc-123
+        content:
+          type: string
+          example: Paris is the capital of France.
+        sourceUrl:
+          type: string
+          format: uri
+          example: https://docs.example.com/france
+        score:
+          type: number
+          format: double
+          example: 0.95
+
+    SenderType:
+      type: string
+      enum:
+        - USER
+        - BOT
+
+    PagedMessageResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageResponse'
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        last:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          format: int32
+        message:
+          type: string

@@ -1,6 +1,7 @@
 package com.assessment.ragchat.security;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -24,6 +25,14 @@ public class SecurityConfig {
     private final RateLimitFilter rateLimitFilter;
     private final RequestIdFilter requestIdFilter;
 
+    @Value("#{'${app.cors.allowed-origins:*}'.split(',')}")
+    private List<String> allowedOrigins;
+
+    @Value("#{'${app.cors.allowed-methods:GET,POST,PATCH,DELETE,OPTIONS}'.split(',')}")
+    private List<String> allowedMethods;
+
+    @Value("#{'${app.cors.allowed-headers:*}'.split(',')}")
+    private List<String> allowedHeaders;
 
     private static final String[] PUBLIC_PATHS = {
             "/actuator/health",
@@ -52,9 +61,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("*"));
-        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
+        config.setAllowedOrigins(allowedOrigins);
+        config.setAllowedMethods(allowedMethods);
+        config.setAllowedHeaders(allowedHeaders);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;

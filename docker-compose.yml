@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16
@@ -14,7 +12,7 @@ services:
       - ragchat_data:/var/lib/postgresql/data
 
   adminer:
-    image: adminer
+    image: adminer:4
     container_name: ragchat-adminer
     ports:
       - "8090:8080"

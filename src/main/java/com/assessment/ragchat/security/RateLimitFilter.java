@@ -9,6 +9,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -23,7 +24,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
 
-    private static final int MAX_REQUESTS_PER_MINUTE = 100;
+    @Value("${app.rate-limit.max-requests-per-minute:100}")
+    private int maxRequestsPerMinute;
+
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper;
 
@@ -34,8 +37,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private Bucket createNewBucket() {
         Bandwidth limit = Bandwidth.builder()
-                .capacity(MAX_REQUESTS_PER_MINUTE)
-                .refillGreedy(MAX_REQUESTS_PER_MINUTE, Duration.ofMinutes(1))
+                .capacity(maxRequestsPerMinute)
+                .refillGreedy(maxRequestsPerMinute, Duration.ofMinutes(1))
                 .build();
         return Bucket.builder()
                 .addLimit(limit)
@@ -74,7 +77,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                         ErrorResponse.builder()
                                 .timestamp(LocalDateTime.now())
                                 .status(HttpStatus.TOO_MANY_REQUESTS.value())
-                                .message("Too many requests - limit is 100 requests per minute")
+                                .message("Too many requests - limit is " + maxRequestsPerMinute + " requests per minute")
                                 .build()
                 )
         );

@@ -7,6 +7,9 @@ target/
 *.iml
 *.iws
 
+# VS Code
+.vscode/
+
 # Environment
 .env
 
