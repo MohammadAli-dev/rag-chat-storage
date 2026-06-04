@@ -35,7 +35,8 @@ A production-style Spring Boot 4 REST API for storing and managing RAG (Retrieva
 └──────────────────────────┬──────────────────────────────────┘
                            │ HTTP + X-API-KEY
 ┌──────────────────────────▼──────────────────────────────────┐
-│                  Spring Boot 4 (port 8082)                   │
+│               Docker Compose: ragchat-app                    │
+│               Spring Boot 4 (port 8082)                      │
 │                                                              │
 │  Filter Chain:                                               │
 │  RequestIdFilter → ApiKeyFilter → RateLimitFilter            │
@@ -50,7 +51,8 @@ A production-style Spring Boot 4 REST API for storing and managing RAG (Retrieva
 └──────────────────────────┬──────────────────────────────────┘
                            │ JPA + Flyway Migrations
 ┌──────────────────────────▼──────────────────────────────────┐
-│                    PostgreSQL 16 (Docker)                     │
+│           Docker Compose: ragchat-postgres                   │
+│           PostgreSQL 16 + persisted named volume             │
 │                                                              │
 │  chat_sessions              chat_messages                    │
 │  ─────────────              ─────────────                    │
@@ -61,6 +63,8 @@ A production-style Spring Boot 4 REST API for storing and managing RAG (Retrieva
 │  created_at                 context (JSONB)                  │
 │  updated_at                 created_at                       │
 └─────────────────────────────────────────────────────────────┘
+
+Adminer runs as `ragchat-adminer` at http://localhost:8090.
 ```
 
 ### Filter Chain
@@ -91,7 +95,7 @@ Every request passes through three ordered filters before reaching a controller:
 | Validation | Jakarta Bean Validation |
 | Utilities | Lombok, Jackson JSR-310 |
 | Build | Maven |
-| Containers | Docker Compose (PostgreSQL + Adminer) |
+| Containers | Docker Compose (Spring Boot app + PostgreSQL + Adminer) |
 
 ---
 
@@ -99,7 +103,9 @@ Every request passes through three ordered filters before reaching a controller:
 
 ```
 rag-chat-storage/
-├── docker-compose.yml              # PostgreSQL + Adminer containers
+├── Dockerfile                      # Multi-stage app image build
+├── .dockerignore                   # Docker build context exclusions
+├── docker-compose.yml              # Spring Boot + PostgreSQL + Adminer stack
 ├── pom.xml                         # Maven build configuration
 ├── src/
 │   ├── main/
@@ -165,9 +171,9 @@ rag-chat-storage/
 
 | Requirement | Version | Notes |
 |------------|---------|-------|
-| Java | 21+ | LTS release |
-| Maven | 3.9+ | Or use the included `./mvnw` wrapper |
-| Docker Desktop | Latest | Required for PostgreSQL and Adminer |
+| Docker Desktop | Latest | Required for the one-command stack |
+| Java | 21+ | Required only for local, non-Docker development |
+| Maven | 3.9+ | Optional; the Docker build uses a Maven build stage |
 
 ---
 
@@ -180,32 +186,38 @@ git clone https://github.com/MohammadAli-dev/rag-chat-storage.git
 cd rag-chat-storage
 ```
 
-### 2. Start the database
+### 2. Start the full Docker stack
 
 ```bash
-docker compose up -d
+docker compose up --build
 ```
 
-This starts two containers:
+This builds the Spring Boot application image, starts PostgreSQL, waits for the database health check, and then starts the application.
 
 | Container | Purpose | URL |
 |-----------|---------|-----|
+| `ragchat-app` | Spring Boot API | [http://localhost:8082](http://localhost:8082) |
 | `ragchat-postgres` | PostgreSQL 16 database | `localhost:5432` |
 | `ragchat-adminer` | Web-based DB admin tool | [http://localhost:8090](http://localhost:8090) |
 
-Flyway will automatically apply migrations on first startup.
+Inside Docker, the application connects to PostgreSQL with `jdbc:postgresql://postgres:5432/ragchat`. Flyway automatically validates and applies migrations during application startup.
 
-### 3. Start the application
+To run the stack in the background:
 
 ```bash
-./mvnw spring-boot:run
+docker compose up --build -d
 ```
 
-The application starts on port **8082**.
-
-### 4. Verify it's running
+To build only the application image:
 
 ```bash
+docker compose build app
+```
+
+### 3. Verify the stack
+
+```bash
+docker compose ps
 curl http://localhost:8082/actuator/health
 ```
 
@@ -214,9 +226,26 @@ Expected response:
 {"groups":["liveness","readiness"],"status":"UP"}
 ```
 
-### 5. Open Swagger UI
+### 4. Open Swagger UI
 
 Navigate to [http://localhost:8082/swagger-ui/index.html](http://localhost:8082/swagger-ui/index.html) to explore all endpoints interactively. Click **Authorize** and enter your API key to test authenticated endpoints.
+
+Adminer is available at [http://localhost:8090](http://localhost:8090). Use `postgres` as the server name when connecting from Adminer to the database container.
+
+### 5. Troubleshooting
+
+```bash
+# View application startup, datasource, and Flyway logs
+docker compose logs app
+
+# Check PostgreSQL health and logs
+docker compose ps
+docker compose logs postgres
+
+# Rebuild from a clean application image
+docker compose build --no-cache app
+docker compose up -d
+```
 
 ---
 
@@ -607,14 +636,17 @@ Tests use a separate `application-test.yml` profile with `api-key: test-api-key`
 ## Building for Production
 
 ```bash
-# Build the executable JAR
-./mvnw clean package -DskipTests
+# Build the Docker image
+docker compose build app
 
-# Run the JAR
-java -jar target/ragchat-0.0.1-SNAPSHOT.jar
+# Start the full stack
+docker compose up -d
 ```
 
-For production, override the API key via environment variable:
+The Dockerfile uses a Maven build stage to package the application and a Java 21 runtime stage to run the final JAR. The runtime container receives configuration from `docker-compose.yml`.
+
+For production, override sensitive values before deployment:
+
 ```bash
-APP_SECURITY_API_KEY=your-production-key java -jar target/ragchat-0.0.1-SNAPSHOT.jar
+APP_SECURITY_API_KEY=<production-api-key> docker compose up --build -d
 ```
